@@ -436,9 +436,10 @@ const CONFIG = {
   endpoint: "https://script.google.com/macros/s/AKfycbz1QN_rQay3J4b4EO_5xj_tuewXvsPyfqSFixOt_DY8NEPiJqOHuP0ZmXJzP8n7jBvx/exec",
   marca: "SkyGifts",
   precos: { 1: 1490, 2: 2790, 3: 3990, 5: 5990, 10: 10990, 20: 19990, 30: 27990, 50: 42990 },
-  pecaMm: 50,                  // tamanho FINAL do ímã em mm (50 = 5x5 cm)
-  margemFolhaMm: 5,            // margem branca em volta de cada peça na folha (5 => área de 6x6 cm)
-  cantoMm: 3,                  // raio do canto arredondado da peça
+  pecaMm: 60,                  // tamanho da PEÇA impressa em mm (60 = 6x6 cm, igual à base magnética)
+  margemFolhaMm: 2,            // folga branca em volta de cada peça, só para o recorte
+  cantoMm: 5,                  // raio do canto arredondado da peça
+  textoTamanho: "5×5 cm",      // o que o SITE mostra para a cliente (deixe "" para usar o tamanho real)
   linhaCorte: true,            // desenha o contorno de corte em cinza claro
   geometria: "A",
   maxCaracteres: 40,
@@ -463,7 +464,7 @@ const escala = g => ({
 });
 const GEOMS = { A: escala(BASE.A), B: escala(BASE.B) };
 const VIEWBOX = `0 0 ${PECA} ${PECA}`;
-const tamanhoTexto = `${(PECA / 10).toString().replace(".", ",")}×${(PECA / 10).toString().replace(".", ",")} cm`;
+const tamanhoTexto = CONFIG.textoTamanho || `${(PECA / 10).toString().replace(".", ",")}×${(PECA / 10).toString().replace(".", ",")} cm`;
 const FONTS = {
   manuscrita: { label: "Manuscrita", css: '"Caveat", cursive', family: '"Caveat", cursive', weight: 600, style: "normal", k: 1.25, vs: "" },
   classica: { label: "Clássica", css: '"Fraunces", Georgia, serif', family: '"Fraunces", Georgia, serif', weight: 400, style: "italic", k: 1, vs: "font-variation-settings:'SOFT' 100,'opsz' 12" },
@@ -677,10 +678,10 @@ async function montarPDF(numero) {
   const F = CONFIG.folha;
   const peca = PECA;                              // o ímã em si
   const margem = CONFIG.margemFolhaMm || 0;       // margem branca de recorte
-  const cel = peca + 2 * margem;                  // área impressa de cada peça
+  const cel = peca + 2 * margem;                  // passo da grade (peça + folga de recorte)
   const raio = CONFIG.cantoMm || 0;
-  const colunasFolha = Math.max(1, Math.floor(190 / cel));
-  const linhasFolha = Math.max(1, Math.floor(268 / cel));
+  const colunasFolha = Math.max(1, Math.floor(194 / cel));
+  const linhasFolha = Math.max(1, Math.floor(272 / cel));
   const margemX = (210 - colunasFolha * cel) / 2;
   let idx = 0, pagina = 0;
   while (idx < pecas.length) {
@@ -708,8 +709,8 @@ async function montarPDF(numero) {
           doc.line(px0 - 1, my, px0 - 1 - t, my);
           doc.line(px0 + peca + 1, my, px0 + peca + 1 + t, my);
         });
-        doc.setFontSize(5); doc.setTextColor(140);
-        doc.text(`${numero} · ${idx + 1}/${pecas.length}`, cx + cel / 2, cy + cel - 0.8, { align: "center" });
+        doc.setFontSize(4.5); doc.setTextColor(150);
+        doc.text(`${numero} · ${idx + 1}/${pecas.length}`, px0 + peca / 2, py0 + peca + 3, { align: "center" });
         doc.setTextColor(0);
         idx++;
       }
