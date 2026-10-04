@@ -239,12 +239,12 @@ footer a{color:var(--sky-deep)}
 
   <section class="band" id="produto">
     <div class="wrap produto">
-      <div class="demo"><svg viewBox="0 0 50 50" id="demoMagnet" role="img" aria-label="Exemplo de ímã personalizado"></svg></div>
+      <div class="demo"><svg viewBox="0 0 50 50" id="demoMagnet" data-viewbox role="img" aria-label="Exemplo de ímã personalizado"></svg></div>
       <div>
         <h2>Ímãs personalizados</h2>
         <p class="lead">Transforme suas fotos favoritas em pequenas memórias para guardar todos os dias.</p>
         <ul class="feat">
-          <li>Tamanho 5×5 cm, estilo Polaroid</li>
+          <li>Tamanho <span data-tam></span>, estilo Polaroid</li>
           <li>Uma foto diferente em cada ímã</li>
           <li>Frase personalizada abaixo de cada foto</li>
           <li>Produzido especialmente para você</li>
@@ -273,7 +273,7 @@ footer a{color:var(--sky-deep)}
     <div class="wrap" style="max-width:760px">
       <h2>Perguntas frequentes</h2>
       <p class="lead">Se ficar qualquer dúvida, é só chamar no WhatsApp.</p>
-      <details><summary>Qual o tamanho dos ímãs?</summary><p>Cada ímã tem 5×5 cm, no estilo Polaroid: a foto na parte de cima e a sua frase na faixa branca de baixo.</p></details>
+      <details><summary>Qual o tamanho dos ímãs?</summary><p>Cada ímã tem <span data-tam></span>, no estilo Polaroid: a foto na parte de cima e a sua frase na faixa branca de baixo.</p></details>
       <details><summary>Posso usar uma foto diferente em cada ímã?</summary><p>Sim. Cada memória tem a sua própria foto e a sua própria frase.</p></details>
       <details><summary>Como envio minhas fotos?</summary><p>Direto por aqui. Você escolhe a foto do celular ou do computador, ajusta o enquadramento arrastando e finaliza o pedido.</p></details>
       <details><summary>Como funciona o pagamento?</summary><p>Depois que você finaliza a personalização, recebemos seu pedido e entramos em contato pelo WhatsApp para combinar o pagamento e o envio.</p></details>
@@ -366,7 +366,7 @@ footer a{color:var(--sky-deep)}
       </div>
       <div class="box">
         <dl>
-          <dt>Produto</dt><dd>Ímãs personalizados 5×5 cm</dd>
+          <dt>Produto</dt><dd>Ímãs personalizados <span data-tam></span></dd>
           <dt>Quantidade</dt><dd id="revQtd"></dd>
           <dt>Nome</dt><dd id="revNome"></dd>
           <dt>WhatsApp</dt><dd id="revZap"></dd>
@@ -433,23 +433,37 @@ const CONFIG = {
   // Opcional: se um dia quiser a mensagem do pedido já digitada na conversa,
   // coloque aqui o número (55 + DDD + número, só dígitos) e o site passa a usá-lo.
   whatsapp: "",
-  endpoint: "",
+  endpoint: "https://script.google.com/macros/s/AKfycbz1QN_rQay3J4b4EO_5xj_tuewXvsPyfqSFixOt_DY8NEPiJqOHuP0ZmXJzP8n7jBvx/exec",
   marca: "SkyGifts",
   precos: { 1: 1490, 2: 2790, 3: 3990, 5: 5990, 10: 10990, 20: 19990, 30: 27990, 50: 42990 },
+  pecaMm: 50,                  // tamanho FINAL do ímã em mm (50 = 5x5 cm)
+  margemFolhaMm: 5,            // margem branca em volta de cada peça na folha (5 => área de 6x6 cm)
+  cantoMm: 3,                  // raio do canto arredondado da peça
+  linhaCorte: true,            // desenha o contorno de corte em cinza claro
   geometria: "A",
   maxCaracteres: 40,
   painelTesteVisivel: false,
-  folha: { colunas: 3, linhas: 5, calha: 4, margemX: 26, margemY: 16 }
+  folha: { margemY: 14 }       // as colunas e linhas são calculadas pelo tamanho da peça
 };
 /* =================================================================== */
 
 const PT = 0.3528;
 const MAX_MB = 15;
 const ACCEPT = ["image/jpeg", "image/png", "image/webp"];
-const GEOMS = {
+const PECA = CONFIG.pecaMm || 50;          // lado da peça em mm
+const K = PECA / 50;                       // fator de escala sobre o desenho base
+const BASE = {
   A: { photo: { x: 5, y: 3, w: 40, h: 40 }, cap: { x: 5, y: 43.3, w: 40, h: 6.2 }, minPt: 6.5, maxPt: 12 },
   B: { photo: { x: 3, y: 3, w: 44, h: 36 }, cap: { x: 3, y: 39.6, w: 44, h: 9.6 }, minPt: 7, maxPt: 13 }
 };
+const escala = g => ({
+  photo: { x: g.photo.x * K, y: g.photo.y * K, w: g.photo.w * K, h: g.photo.h * K },
+  cap: { x: g.cap.x * K, y: g.cap.y * K, w: g.cap.w * K, h: g.cap.h * K },
+  minPt: g.minPt * K, maxPt: g.maxPt * K
+});
+const GEOMS = { A: escala(BASE.A), B: escala(BASE.B) };
+const VIEWBOX = `0 0 ${PECA} ${PECA}`;
+const tamanhoTexto = `${(PECA / 10).toString().replace(".", ",")}×${(PECA / 10).toString().replace(".", ",")} cm`;
 const FONTS = {
   manuscrita: { label: "Manuscrita", css: '"Caveat", cursive', family: '"Caveat", cursive', weight: 600, style: "normal", k: 1.25, vs: "" },
   classica: { label: "Clássica", css: '"Fraunces", Georgia, serif', family: '"Fraunces", Georgia, serif', weight: 400, style: "italic", k: 1, vs: "font-variation-settings:'SOFT' 100,'opsz' 12" },
@@ -492,8 +506,10 @@ function wrap(text, f, em, maxW) {
 function fitText(text, fontKey, g) {
   const f = FONTS[fontKey];
   if (!text.trim()) return { lines: [], em: 0, ok: true, empty: true };
-  const maxW = g.cap.w - 2;
-  for (let pt = g.maxPt; pt >= g.minPt - 1e-9; pt -= 0.25) {
+  const maxW = g.cap.w - 2 * K;
+  const passos = Math.ceil((g.maxPt - g.minPt) / 0.25);
+  for (let i = 0; i <= passos; i++) {
+    const pt = Math.max(g.minPt, g.maxPt - i * 0.25);   // o último passo é sempre o tamanho mínimo
     const em = pt * PT * f.k;
     const lines = wrap(text, f, em, maxW);
     if (lines.length <= 2 && lines.length * em * 1.08 <= g.cap.h) return { lines, em, pt, ok: true };
@@ -518,7 +534,7 @@ const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&
 
 function magnetSVG(m, g, opts = {}) {
   const P = g.photo, C = g.cap, id = "c" + (++uidSeq);
-  let s = `<rect width="50" height="50" rx="0.4" fill="#FFFFFF"/>`;
+  let s = `<rect width="${PECA}" height="${PECA}" rx="${CONFIG.cantoMm || 0}" fill="#FFFFFF"/>`;
   s += `<defs><clipPath id="${id}"><rect x="${P.x}" y="${P.y}" width="${P.w}" height="${P.h}"/></clipPath></defs>`;
   if (m.img) {
     const r = place(m, g);
@@ -552,9 +568,9 @@ function magnetSVG(m, g, opts = {}) {
     s += `<rect x="${P.x}" y="${P.y}" width="${P.w}" height="${P.h}" ${d}/>`;
     s += `<rect x="${C.x}" y="${C.y}" width="${C.w}" height="${C.h}" ${d}/>`;
     const t = `font-family="Figtree, sans-serif" font-size="1.7" fill="#D1495B"`;
-    s += `<text x="${P.x + 0.8}" y="${P.y + 2.2}" ${t}>foto ${P.w}×${P.h} mm</text>`;
+    s += `<text x="${P.x + 0.8}" y="${P.y + 2.2}" ${t}>foto ${P.w.toFixed(0)}×${P.h.toFixed(0)} mm</text>`;
     s += `<text x="${C.x + 0.8}" y="${C.y - 0.6}" ${t}>frase ${C.h.toFixed(1)} mm${ft.empty ? "" : " · " + (ft.em / PT).toFixed(1) + " pt"}</text>`;
-    s += `<rect x="0.1" y="0.1" width="49.8" height="49.8" fill="none" stroke="#D1495B" stroke-width="0.15"/>`;
+    s += `<rect x="0.1" y="0.1" width="${PECA - 0.2}" height="${PECA - 0.2}" fill="none" stroke="#D1495B" stroke-width="0.15"/>`;
   }
   return { svg: s, fit: ft };
 }
@@ -562,7 +578,7 @@ function magnetSVG(m, g, opts = {}) {
 function desenharPeca(m, g, dpi) {
   const px = mm => mm / 25.4 * dpi;
   const c = document.createElement("canvas");
-  c.width = Math.round(px(50)); c.height = Math.round(px(50));
+  c.width = Math.round(px(PECA)); c.height = Math.round(px(PECA));
   const x = c.getContext("2d");
   x.fillStyle = "#FFFFFF"; x.fillRect(0, 0, c.width, c.height);
   const P = g.photo, C = g.cap;
@@ -628,12 +644,12 @@ async function montarPDF(numero) {
     `WhatsApp: ${cliente.zap}`,
     `Quantidade: ${memories.length} ${memories.length === 1 ? "ímã" : "ímãs"}`,
     `Valor dos produtos: ${total ? brl(total) : "a combinar"} (frete à parte)`,
-    `Formato: peça 50 × 50 mm, foto ${g.photo.w} × ${g.photo.h} mm, 300 dpi`,
+    `Formato: ímã ${PECA} × ${PECA} mm (cantos ${CONFIG.cantoMm} mm), impresso em área de ${PECA + 2 * CONFIG.margemFolhaMm} × ${PECA + 2 * CONFIG.margemFolhaMm} mm, foto ${g.photo.w.toFixed(0)} × ${g.photo.h.toFixed(0)} mm, 300 dpi`,
     `Recebido em: ${agora}`
   ];
   linhas.forEach((t, i) => doc.text(t, 20, 72 + i * 7));
   doc.setFontSize(9); doc.setTextColor(120);
-  doc.text("Imprima sempre em 100% (sem ajustar à página). Confira a barra de 50 mm no rodapé das folhas.", 20, 124, { maxWidth: 170 });
+  doc.text(`Imprima sempre em 100% (sem ajustar à página). Confira a barra de ${PECA} mm no rodapé das folhas.`, 20, 124, { maxWidth: 170 });
 
   const pecas = [];
   for (let i = 0; i < memories.length; i++) {
@@ -658,39 +674,52 @@ async function montarPDF(numero) {
     cy += 28;
   });
 
-  const F = CONFIG.folha, size = 50;
+  const F = CONFIG.folha;
+  const peca = PECA;                              // o ímã em si
+  const margem = CONFIG.margemFolhaMm || 0;       // margem branca de recorte
+  const cel = peca + 2 * margem;                  // área impressa de cada peça
+  const raio = CONFIG.cantoMm || 0;
+  const colunasFolha = Math.max(1, Math.floor(190 / cel));
+  const linhasFolha = Math.max(1, Math.floor(268 / cel));
+  const margemX = (210 - colunasFolha * cel) / 2;
   let idx = 0, pagina = 0;
   while (idx < pecas.length) {
     doc.addPage(); pagina++;
     doc.setFontSize(8); doc.setTextColor(120);
-    doc.text(`${numero} · folha de produção ${pagina} · imprimir em 100%`, F.margemX, 10);
+    doc.text(`${numero} · folha de produção ${pagina} · peça ${peca} mm com ${margem} mm de margem · imprimir em 100%`, margemX, 9);
     doc.setTextColor(0);
-    for (let r = 0; r < F.linhas && idx < pecas.length; r++) {
-      for (let c = 0; c < F.colunas && idx < pecas.length; c++) {
-        const x = F.margemX + c * (size + F.calha);
-        const y = F.margemY + r * (size + F.calha);
-        doc.addImage(pecas[idx], "JPEG", x, y, size, size);
-        doc.setDrawColor(150); doc.setLineWidth(0.1);
-        [[x, y, -1], [x + size, y, 1]].forEach(([mx, my, s]) => {
-          doc.line(mx + s * 1, my, mx + s * 3, my);
-          doc.line(mx, my - 2, mx, my - 0.5);
+    for (let r = 0; r < linhasFolha && idx < pecas.length; r++) {
+      for (let c = 0; c < colunasFolha && idx < pecas.length; c++) {
+        const cx = margemX + c * cel, cy = F.margemY + r * cel;   // canto da área impressa
+        const px0 = cx + margem, py0 = cy + margem;               // canto da peça
+        doc.addImage(pecas[idx], "JPEG", px0, py0, peca, peca);
+        if (CONFIG.linhaCorte) {
+          doc.setDrawColor(165); doc.setLineWidth(0.12);
+          doc.roundedRect(px0, py0, peca, peca, raio, raio, "S");
+        }
+        // marcas de corte na margem, alinhadas com as retas da peça
+        doc.setDrawColor(120); doc.setLineWidth(0.1);
+        const t = Math.min(3, margem - 1);
+        [px0 + raio, px0 + peca - raio].forEach(mx => {
+          doc.line(mx, py0 - 1, mx, py0 - 1 - t);
+          doc.line(mx, py0 + peca + 1, mx, py0 + peca + 1 + t);
         });
-        [[x, y + size, -1], [x + size, y + size, 1]].forEach(([mx, my, s]) => {
-          doc.line(mx + s * 1, my, mx + s * 3, my);
-          doc.line(mx, my + 0.5, mx, my + 2);
+        [py0 + raio, py0 + peca - raio].forEach(my => {
+          doc.line(px0 - 1, my, px0 - 1 - t, my);
+          doc.line(px0 + peca + 1, my, px0 + peca + 1 + t, my);
         });
-        doc.setFontSize(5); doc.setTextColor(120);
-        doc.text(`${numero} · ${idx + 1}/${pecas.length}`, x + size / 2, y + size + 3, { align: "center" });
+        doc.setFontSize(5); doc.setTextColor(140);
+        doc.text(`${numero} · ${idx + 1}/${pecas.length}`, cx + cel / 2, cy + cel - 0.8, { align: "center" });
         doc.setTextColor(0);
         idx++;
       }
     }
     doc.setDrawColor(80); doc.setLineWidth(0.3);
-    doc.line(F.margemX, 289, F.margemX + 50, 289);
-    doc.line(F.margemX, 287.5, F.margemX, 290.5);
-    doc.line(F.margemX + 50, 287.5, F.margemX + 50, 290.5);
+    doc.line(margemX, 289, margemX + peca, 289);
+    doc.line(margemX, 287.5, margemX, 290.5);
+    doc.line(margemX + peca, 287.5, margemX + peca, 290.5);
     doc.setFontSize(7); doc.setTextColor(120);
-    doc.text("esta barra deve medir 50 mm na régua", F.margemX + 54, 290);
+    doc.text(`esta barra deve medir ${peca} mm na régua`, margemX + peca + 4, 290);
     doc.setTextColor(0);
   }
   return doc;
@@ -822,7 +851,7 @@ function cardHTML(i) {
   return `<article class="mem" data-i="${i}">
     <header><h3>Memória ${n}</h3>
       <ul class="dots" aria-label="Situação da memória ${n}"><li data-k="foto">Foto</li><li data-k="texto">Texto</li><li data-k="previa">Prévia</li></ul></header>
-    <div class="stage"><svg class="magnet" viewBox="0 0 50 50" tabindex="0" role="img" aria-label="Prévia do ímã ${n}. Arraste para enquadrar, setas movem, mais e menos ajustam o zoom."></svg></div>
+    <div class="stage"><svg class="magnet" viewBox="${VIEWBOX}" tabindex="0" role="img" aria-label="Prévia do ímã ${n}. Arraste para enquadrar, setas movem, mais e menos ajustam o zoom."></svg></div>
     <p class="hint">Arraste a foto para enquadrar. Use dois dedos ou o controle para aproximar.</p>
     <div class="actions">
       <button type="button" class="chip main" data-act="upload">Escolher foto</button>
@@ -851,7 +880,7 @@ function buildCards() {
   memories.forEach((_, i) => updateCard(i, true));
   updateProgress();
   document.getElementById("subPersonalizar").textContent =
-    `Ímãs personalizados · ${memories.length} ${memories.length === 1 ? "memória" : "memórias"} · 5×5 cm`;
+    `Ímãs personalizados · ${memories.length} ${memories.length === 1 ? "memória" : "memórias"} · ${tamanhoTexto}`;
 }
 
 function updateCard(i, syncInputs) {
@@ -916,7 +945,7 @@ function bindCard(card) {
 
   const pts = new Map();
   let lastDist = 0, moved = false;
-  const mmPerPx = () => 50 / svg.getBoundingClientRect().width;
+  const mmPerPx = () => PECA / svg.getBoundingClientRect().width;
   svg.addEventListener("pointerdown", e => { svg.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = false; if (pts.size === 2) { const [a, b] = [...pts.values()]; lastDist = Math.hypot(a.x - b.x, a.y - b.y); } });
   svg.addEventListener("pointermove", e => {
     if (!pts.has(e.pointerId) || !m().img) return;
@@ -1034,7 +1063,7 @@ document.getElementById("formDados").addEventListener("submit", e => {
 function montarRevisao() {
   const g = GEOMS[geom];
   document.getElementById("thumbs").innerHTML = memories.map((m, i) =>
-    `<div class="thumb"><svg viewBox="0 0 50 50" role="img" aria-label="Memória ${i + 1}">${magnetSVG(m, g).svg}</svg><span>Memória ${i + 1}</span></div>`).join("");
+    `<div class="thumb"><svg viewBox="${VIEWBOX}" role="img" aria-label="Memória ${i + 1}">${magnetSVG(m, g).svg}</svg><span>Memória ${i + 1}</span></div>`).join("");
   document.getElementById("revQtd").textContent = `${memories.length} ${memories.length === 1 ? "ímã" : "ímãs"}`;
   document.getElementById("revNome").textContent = cliente.nome;
   document.getElementById("revZap").textContent = cliente.zap;
@@ -1111,6 +1140,8 @@ function renderHero() {
   document.getElementById("qty").onchange = e => { if (!setQuantidade(+e.target.value, true)) e.target.value = memories.length || 3; else if (memories.length) buildCards(); };
   document.getElementById("qty2").onchange = e => { if (!setQuantidade(+e.target.value, true)) e.target.value = memories.length; else buildCards(); };
   document.getElementById("painelTeste").hidden = !CONFIG.painelTesteVisivel;
+  document.querySelectorAll("[data-tam]").forEach(el => el.textContent = tamanhoTexto);
+  document.querySelectorAll("[data-viewbox]").forEach(el => el.setAttribute("viewBox", VIEWBOX));
   document.getElementById("wppTopo").href = CONFIG.whatsapp
     ? `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent("Olá! Tenho uma dúvida sobre os ímãs personalizados da SkyGifts.")}`
     : CONFIG.whatsappLink;
