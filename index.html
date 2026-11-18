@@ -92,6 +92,7 @@ select.sel{height:48px;border:1px solid var(--line);background:var(--white);bord
 .status-fotos:empty{display:none}
 .estilos{display:flex;gap:6px;flex-wrap:wrap}
 .estilos button{flex:1 1 30%;border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 10px;font-size:13px;cursor:pointer;min-height:38px}
+.estilos button[data-estilo^="natal"]::after{content:var(--preco-natal, "");font-size:11px;color:var(--ink-soft)}
 .estilos button[aria-checked="true"]{border-color:var(--sky-deep);background:var(--mist);font-weight:500}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:22px}
 .mem{background:var(--white);border:1px solid var(--line);border-radius:18px;padding:18px 18px 20px;display:flex;flex-direction:column;gap:12px}
@@ -418,6 +419,8 @@ footer a{color:var(--sky-deep)}
         </div>
 
         <div class="valores">
+          <div id="linhaNormal" hidden><span id="revNormalNome"></span><span id="revNormal"></span></div>
+          <div id="linhaNatal" hidden><span id="revNatalNome"></span><span id="revNatal"></span></div>
           <div><span>Subtotal</span><span id="revSubtotal"></span></div>
           <div id="linhaDesconto" hidden><span id="revCupomNome">Desconto</span><span id="revDesconto"></span></div>
         </div>
@@ -505,7 +508,7 @@ const CONFIG = {
   whatsapp: "",
   endpoint: "https://script.google.com/macros/s/AKfycbz1QN_rQay3J4b4EO_5xj_tuewXvsPyfqSFixOt_DY8NEPiJqOHuP0ZmXJzP8n7jBvx/exec",
   marca: "SkyGifts",
-  precos: { 1: 990, 2: 1790, 3: 2390, 4: 3090, 5: 3790, 6: 4490, 7: 5190, 8: 5890, 9: 6590, 10: 7290, 11: 7990, 12: 8690, 13: 9390, 14: 10090, 15: 10790, 16: 11490, 17: 12190, 18: 12890, 19: 13590, 20: 14290, 30: 20990, 50: 34990 },
+  precos: { 1: 990, 2: 1700, 3: 2550, 4: 3400, 5: 4250, 6: 5100, 7: 5950, 8: 6800, 9: 7650, 10: 8500, 11: 9350, 12: 10200, 13: 11050, 14: 11900, 15: 12750, 16: 13600, 17: 14450, 18: 15300, 19: 16150, 20: 17000, 30: 25500, 50: 42500 },   // 1 ímã R$ 9,90; a partir de 2, R$ 8,50 cada
   pecaMm: 60,                  // área IMPRESSA e de corte (60 = 6x6 cm)
   perdaMm: 4,                  // borda que a prensagem dobra/esconde, em cada lado
   margemLateralMm: 4,          // branco à esquerda e à direita da foto, na face visível
@@ -517,6 +520,7 @@ const CONFIG = {
   linhaCorte: true,            // desenha o contorno de corte em cinza claro
   guiaAreaUtil: false,         // true desenha também a guia da área útil do ímã
   estiloPadrao: "polaroid",
+  precoUnitarioNatal: 990,     // centavos por ímã nos estilos de Natal (não entra no desconto por quantidade)
   // Formas de pagamento mostradas na revisão. Deixe "" para esconder o bloco.
   pagamento: {
     pixChave: "",              // sua chave Pix (celular, e-mail ou aleatória)
@@ -527,6 +531,7 @@ const CONFIG = {
   cupons: {
     BEMVINDO10: { tipo: "percentual", valor: 10 },
     PRIMEIRACOMPRA: { tipo: "percentual", valor: 5 },
+    BLACKSKY: { tipo: "percentual", valor: 5 },
     SABRINA5: { tipo: "percentual", valor: 5 },
     MEMORIA5: { tipo: "fixo", valor: 500 }
   },     // "polaroid" (foto + frase) ou "cheia" (foto ocupando o ímã inteiro)
@@ -596,7 +601,15 @@ let heroMems = [];
 let cliente = { nome: "", zap: "" };
 let pedido = { numero: "", pdf: null, nomeArquivo: "", link: "" };
 let cupom = { codigo: "", desconto: 0 };
-const subtotalPedido = () => CONFIG.precos[memories.length] || 0;
+const ehNatal = m => !!(m && String(m.estilo || "").startsWith("natal"));
+const contagem = () => { const n = memories.filter(ehNatal).length; return { natal: n, normal: memories.length - n }; };
+// Natal tem preço fixo por unidade; os demais seguem a tabela de desconto pela quantidade deles
+const precoNormal = q => q ? (CONFIG.precos[q] || Math.round(q * (CONFIG.precos[Math.max(...Object.keys(CONFIG.precos).map(Number))] / Math.max(...Object.keys(CONFIG.precos).map(Number))))) : 0;
+const subtotalPedido = () => {
+  if (!memories.length) return 0;
+  const c = contagem();
+  return precoNormal(c.normal) + c.natal * (CONFIG.precoUnitarioNatal || 0);
+};
 const totalPedido = () => Math.max(0, subtotalPedido() - cupom.desconto);
 let uidSeq = 0;
 
@@ -911,6 +924,8 @@ function mensagemPedido(numero) {
   let txt = `Olá! Acabei de finalizar meu pedido no site da SkyGifts.\n\n`;
   txt += `Pedido: ${numero}\nNome: ${cliente.nome}\nQuantidade: ${memories.length} ${memories.length === 1 ? "ímã" : "ímãs"}`;
   if (subtotalPedido()) {
+    const cc = contagem();
+    if (cc.natal) txt += `\nDe Natal: ${cc.natal} × ${brl(CONFIG.precoUnitarioNatal)}`;
     txt += `\nSubtotal: ${brl(subtotalPedido())}`;
     if (cupom.desconto) txt += `\nCupom ${cupom.codigo}: − ${brl(cupom.desconto)}`;
     txt += `\nTotal dos produtos: ${brl(totalPedido())} (frete à parte)`;
@@ -1126,7 +1141,7 @@ function updateCard(i, syncInputs) {
 function bindCard(card) {
   const i = +card.dataset.i, m = () => memories[i];
   const svg = card.querySelector(".magnet"), file = card.querySelector('input[type="file"]');
-  const refresh = () => { updateCard(i); updateProgress(); };
+  const refresh = () => { updateCard(i); updateProgress(); renderPrice(); };
   const pick = () => file.click();
   card.querySelector('[data-act="upload"]').onclick = pick;
   file.onchange = async () => {
@@ -1188,11 +1203,14 @@ function updateProgress() {
 }
 
 function renderPrice() {
-  const q = memories.length || +document.getElementById("qty").value;
-  const p = CONFIG.precos[q];
-  const html = p ? `${brl(p)}<small>${brl(Math.round(p / q))} por ímã · frete à parte</small>` : "";
-  document.getElementById("price").innerHTML = html;
-  document.getElementById("price2").innerHTML = html;
+  const qSel = +document.getElementById("qty").value;
+  const pSel = CONFIG.precos[qSel];
+  document.getElementById("price").innerHTML = pSel ? `${brl(pSel)}<small>${brl(Math.round(pSel / qSel))} por ímã · frete à parte</small>` : "";
+  const q = memories.length || qSel;
+  const p = memories.length ? subtotalPedido() : pSel;
+  const c = contagem();
+  const det = c.natal ? `${c.natal} de Natal a ${brl(CONFIG.precoUnitarioNatal)} cada · frete à parte` : `${brl(Math.round(p / q))} por ímã · frete à parte`;
+  document.getElementById("price2").innerHTML = p ? `${brl(p)}<small>${det}</small>` : "";
 }
 
 function setQuantidade(q, perguntar) {
@@ -1280,6 +1298,15 @@ function atualizarValores() {
   const sub = subtotalPedido();
   if (cupom.codigo) cupom.desconto = calcularDesconto(cupom.codigo, sub);
   document.getElementById("revSubtotal").textContent = sub ? brl(sub) : "a combinar";
+  const c = contagem(), misto = c.natal > 0;
+  document.getElementById("linhaNormal").hidden = !(misto && c.normal);
+  document.getElementById("linhaNatal").hidden = !misto;
+  if (misto) {
+    document.getElementById("revNormalNome").textContent = `${c.normal} ${c.normal === 1 ? "ímã" : "ímãs"} (Polaroid / foto inteira)`;
+    document.getElementById("revNormal").textContent = brl(precoNormal(c.normal));
+    document.getElementById("revNatalNome").textContent = `${c.natal} ${c.natal === 1 ? "ímã" : "ímãs"} de Natal × ${brl(CONFIG.precoUnitarioNatal)}`;
+    document.getElementById("revNatal").textContent = brl(c.natal * CONFIG.precoUnitarioNatal);
+  }
   const linha = document.getElementById("linhaDesconto");
   linha.hidden = !cupom.desconto;
   if (cupom.desconto) {
@@ -1352,6 +1379,7 @@ document.querySelectorAll("[data-estilo-todas]").forEach(b => b.onclick = () => 
   document.querySelectorAll("[data-estilo-todas]").forEach(x => x.setAttribute("aria-pressed", x === b));
   memories.forEach((_, i) => updateCard(i, true));
   updateProgress();
+  renderPrice();
 });
 
 document.getElementById("enviar").onclick = finalizar;
@@ -1417,6 +1445,7 @@ function renderHero() {
   document.getElementById("qty").onchange = e => { if (!setQuantidade(+e.target.value, true)) e.target.value = memories.length || 3; else if (memories.length) buildCards(); };
   document.getElementById("qty2").onchange = e => { if (!setQuantidade(+e.target.value, true)) e.target.value = memories.length; else buildCards(); };
   document.getElementById("painelTeste").hidden = !CONFIG.painelTesteVisivel;
+  document.documentElement.style.setProperty("--preco-natal", `" · ${brl(CONFIG.precoUnitarioNatal || 0)}"`);
   document.querySelectorAll("[data-estilo-todas]").forEach(b =>
     b.setAttribute("aria-pressed", b.dataset.estiloTodas === (CONFIG.estiloPadrao || "polaroid")));
   document.querySelectorAll("[data-tam]").forEach(el => el.textContent = tamanhoTexto);
